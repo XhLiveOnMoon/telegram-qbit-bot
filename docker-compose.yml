@@ -10,8 +10,8 @@ services:
       - ${JACKETT_CONFIG_PATH:-./data/jackett}:/config
       - ${JACKETT_DOWNLOADS_PATH:-./data/jackett-downloads}:/downloads
     ports:
-      # Bind only to the LXC address; keep Jackett off all other host interfaces.
-      - "${JACKETT_BIND_IP:-192.168.50.4}:${JACKETT_WEBUI_PORT:-9117}:9117"
+      # Bind to localhost by default; set JACKETT_BIND_IP in .env for a specific LAN interface.
+      - "${JACKETT_BIND_IP:-127.0.0.1}:${JACKETT_WEBUI_PORT:-9117}:9117"
     restart: unless-stopped
 
   telegram-qbit-bot:
