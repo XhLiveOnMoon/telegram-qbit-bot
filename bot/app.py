@@ -100,6 +100,7 @@ def jackett_search(query):
     response.raise_for_status()
     return parse_torznab_results(response.content, SEARCH_LIMIT)
 
+
 def human_size(value):
     try:
         number = float(value)
