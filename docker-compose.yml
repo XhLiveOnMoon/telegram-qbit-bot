@@ -1,0 +1,38 @@
+services:
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ${JACKETT_CONFIG_PATH:-./data/jackett}:/config
+      - ${JACKETT_DOWNLOADS_PATH:-./data/jackett-downloads}:/downloads
+    ports:
+      # Localhost only by default; access through SSH tunnel or change deliberately.
+      - "127.0.0.1:${JACKETT_WEBUI_PORT:-9117}:9117"
+    restart: unless-stopped
+
+  telegram-qbit-bot:
+    build:
+      context: ./bot
+    container_name: telegram-qbit-bot
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS}
+      JACKETT_BASE_URL: http://jackett:9117
+      JACKETT_API_KEY: ${JACKETT_API_KEY}
+      QBIT_BASE_URL: ${QBIT_BASE_URL}
+      QBIT_USERNAME: ${QBIT_USERNAME}
+      QBIT_PASSWORD: ${QBIT_PASSWORD}
+      QBIT_CATEGORY: ${QBIT_CATEGORY:-telegram-bot}
+      SEARCH_LIMIT: ${SEARCH_LIMIT:-10}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      STATE_PATH: /data/state.json
+    volumes:
+      - ${BOT_DATA_PATH:-./data/bot}:/data
+    depends_on:
+      - jackett
+    restart: unless-stopped
