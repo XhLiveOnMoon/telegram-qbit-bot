@@ -10,8 +10,8 @@ services:
       - ${JACKETT_CONFIG_PATH:-./data/jackett}:/config
       - ${JACKETT_DOWNLOADS_PATH:-./data/jackett-downloads}:/downloads
     ports:
-      # Localhost only by default; access through SSH tunnel or change deliberately.
-      - "127.0.0.1:${JACKETT_WEBUI_PORT:-9117}:9117"
+      # Bind only to the LXC address; keep Jackett off all other host interfaces.
+      - "${JACKETT_BIND_IP:-192.168.50.4}:${JACKETT_WEBUI_PORT:-9117}:9117"
     restart: unless-stopped
 
   telegram-qbit-bot:
@@ -36,3 +36,9 @@ services:
     depends_on:
       - jackett
     restart: unless-stopped
+
+# Keep this network name stable: the separate qBittorrent Compose project
+# joins it as an external network.
+networks:
+  default:
+    name: telegram-qbit-bot_default
