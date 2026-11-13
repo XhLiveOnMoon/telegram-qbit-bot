@@ -6,10 +6,10 @@ import os
 import re
 import threading
 import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import requests
+from torznab import parse_torznab_results
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -98,35 +98,7 @@ def jackett_search(query):
         timeout=90,
     )
     response.raise_for_status()
-    root = ET.fromstring(response.content)
-    results = []
-    for item in root.findall(".//item"):
-        title = item.findtext("title") or "未命名资源"
-        link = item.findtext("link") or ""
-        seeders, size, magnet = "", "", ""
-        for attr in item.findall("{*}attr"):
-            name = attr.attrib.get("name", "").lower()
-            value = attr.attrib.get("value", "")
-            if name == "seeders":
-                seeders = value
-            elif name == "size":
-                size = value
-            elif name == "magneturl":
-                magnet = value
-        if not magnet and link.startswith("magnet:"):
-            magnet = link
-        download_url = magnet or link
-        if download_url.startswith(("magnet:", "http://", "https://")):
-            results.append({
-                "title": title, "url": download_url,
-                "seeders": seeders, "size": size,
-            })
-    results.sort(
-        key=lambda row: int(row["seeders"]) if row["seeders"].isdigit() else -1,
-        reverse=True,
-    )
-    return results[:SEARCH_LIMIT]
-
+    return parse_torznab_results(response.content, SEARCH_LIMIT)
 
 def human_size(value):
     try:
