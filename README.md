@@ -6,7 +6,7 @@ A lightweight, self-hosted Telegram bot that searches the Jackett indexers you c
 
 ## 1. What it does
 
-- `/search <keyword>`: search Jackett's Torznab `all` endpoint and show up to `SEARCH_LIMIT` results.
+- `/search <keyword>`: search Jackett's Torznab `all` endpoint and retain up to `SEARCH_LIMIT` results, displayed 10 per page with Previous/Next buttons.
 - Inline buttons: submit a selected result to qBittorrent.
 - Send a magnet URI: submit it to qBittorrent.
 - Send a direct HTTP(S) torrent URL: ask qBittorrent to fetch it. This is **not** a general web-page parser.
@@ -85,7 +85,7 @@ Copy `.env.example` to `.env` and replace the placeholders. Compose reads `.env`
 | `JACKETT_CONFIG_PATH` | No | `./data/jackett` | Host path for Jackett configuration and indexer settings. Keep this persistent. Relative paths are resolved from the Compose project directory. |
 | `JACKETT_DOWNLOADS_PATH` | No | `./data/jackett-downloads` | Host path mounted at `/downloads` inside Jackett, for optional Jackett blackhole/download workflows. The bot's normal Torznab search does not require this directory. |
 | `BOT_DATA_PATH` | No | `./data/bot` | Host path for bot state, including completion-notification progress history. Must be writable by the bot container's runtime user. |
-| `SEARCH_LIMIT` | No | `10` | Maximum number of results shown per search. Code clamps this value to 1–20. |
+| `SEARCH_LIMIT` | No | `20` | Maximum number of results retained per search. Code clamps this value to 1–20; Telegram displays 10 results per page. |
 | `POLL_INTERVAL_SECONDS` | No | `60` | Seconds between qBittorrent task polls for completion notifications. Code enforces a minimum of 20 seconds. |
 
 ### Important qBittorrent connectivity note
@@ -150,6 +150,7 @@ Create the Telegram bot with `@BotFather`, obtain your numeric Telegram user ID 
 - Search depends on the indexers you configure in Jackett. Indexer availability, login, cookies, rate limits, and result quality are external to this bot.
 - Some private trackers require authentication or passkey-bearing download URLs. Configure them in Jackett where supported, and never publish those URLs or credentials.
 - The bot does not parse arbitrary detail pages, scrape search engines, or infer download links from a web page.
+- Search results are sorted by seeders descending, then publication date descending. Results with unknown seeder counts sort after results with known counts; ties retain Jackett's original order. The bot retains up to `SEARCH_LIMIT` results and displays 10 per Telegram page. Publication dates and indexer names are shown when Jackett provides them.
 - The search result cache is in memory. Buttons from before a bot restart will no longer work.
 - Completion notifications are based on a detected progress transition from below 100% to 100%. Tasks already at 100% when first observed are treated as existing and do not trigger a notification. If the bot is offline while a task completes, the transition may be missed.
 - The bot currently provides `/list` but not pause, resume, delete, or per-task progress commands.
