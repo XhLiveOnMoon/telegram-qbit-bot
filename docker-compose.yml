@@ -28,7 +28,7 @@ services:
       QBIT_USERNAME: ${QBIT_USERNAME}
       QBIT_PASSWORD: ${QBIT_PASSWORD}
       QBIT_CATEGORY: ${QBIT_CATEGORY:-telegram-bot}
-      SEARCH_LIMIT: ${SEARCH_LIMIT:-10}
+      SEARCH_LIMIT: ${SEARCH_LIMIT:-20}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
       STATE_PATH: /data/state.json
     volumes:
