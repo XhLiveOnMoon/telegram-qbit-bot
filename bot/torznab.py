@@ -1,6 +1,8 @@
 """Small, dependency-free parser for Jackett Torznab RSS responses."""
 
 import xml.etree.ElementTree as ET
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 
 
 def _local_name(tag):
@@ -40,6 +42,8 @@ def parse_torznab_results(xml_content, limit=10):
         link = _child_text(item, "link")
         seeders = _child_text(item, "seeders")
         size = _child_text(item, "size")
+        published = _child_text(item, "pubdate")
+        indexer = _child_text(item, "jackettindexer") or _child_text(item, "indexer")
         magnet = ""
 
         for element in item.iter():
@@ -54,6 +58,18 @@ def parse_torznab_results(xml_content, limit=10):
             elif name == "magneturl" and not magnet:
                 magnet = value
 
+        published_timestamp = 0.0
+        published_display = ""
+        if published:
+            try:
+                published_date = parsedate_to_datetime(published)
+                if published_date.tzinfo is None:
+                    published_date = published_date.replace(tzinfo=timezone.utc)
+                published_timestamp = published_date.timestamp()
+                published_display = published_date.astimezone(timezone.utc).strftime("%Y-%m-%d")
+            except (TypeError, ValueError, OverflowError):
+                pass
+
         if not magnet and link.startswith("magnet:"):
             magnet = link
 
@@ -64,10 +80,16 @@ def parse_torznab_results(xml_content, limit=10):
                 "url": download_url,
                 "seeders": seeders,
                 "size": size,
+                "published_timestamp": published_timestamp,
+                "published": published_display,
+                "indexer": indexer,
             })
 
     results.sort(
-        key=lambda row: int(row["seeders"]) if row["seeders"].isdigit() else -1,
+        key=lambda row: (
+            int(row["seeders"]) if row["seeders"].isdigit() else -1,
+            row["published_timestamp"],
+        ),
         reverse=True,
     )
     return results[:max(1, int(limit))]
