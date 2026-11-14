@@ -6,7 +6,7 @@
 
 ## 1. 功能
 
-- `/search 关键词`：通过 Jackett 的 Torznab `all` 接口搜索，最多显示 `SEARCH_LIMIT` 条结果。
+- `/search 关键词`：通过 Jackett 的 Torznab `all` 接口搜索，最多保留 `SEARCH_LIMIT` 条结果；Telegram 每页显示 10 条，可用上一页/下一页按钮翻页。
 - 搜索结果以 Telegram 按钮展示，点击后才提交给 qBittorrent。
 - 直接发送磁力链接：提交给 qBittorrent。
 - 发送直接 HTTP(S) 种子下载地址：让 qBittorrent 自行获取。**这不等于通用网页解析器**。
@@ -85,7 +85,7 @@ telegram-qbit-bot/
 | `JACKETT_CONFIG_PATH` | 否 | `./data/jackett` | Jackett 配置和索引站点设置的宿主机持久化目录。不要随意删除。相对路径以 Compose 项目目录为基准。 |
 | `JACKETT_DOWNLOADS_PATH` | 否 | `./data/jackett-downloads` | 映射到 Jackett 容器内 `/downloads` 的宿主机目录，供可选的 Jackett blackhole 等下载工作流使用。机器人正常调用 Torznab 搜索并不依赖此目录。 |
 | `BOT_DATA_PATH` | 否 | `./data/bot` | 机器人状态文件的宿主机持久化目录，包括下载完成通知的进度记录。必须允许机器人容器运行用户写入。 |
-| `SEARCH_LIMIT` | 否 | `10` | 每次搜索最多展示多少条结果。程序会限制在 1–20 条之间。 |
+| `SEARCH_LIMIT` | 否 | `20` | 每次搜索最多保留多少条结果。程序会限制在 1–20 条之间；Telegram 每页显示 10 条。 |
 | `POLL_INTERVAL_SECONDS` | 否 | `60` | 机器人轮询 qBittorrent 检查下载完成状态的间隔秒数。程序强制最小值为 20 秒。 |
 
 ### 特别注意：机器人如何连接另一个 Docker 项目里的 qBittorrent
@@ -150,6 +150,7 @@ ssh -L 9117:127.0.0.1:9117 <SSH用户名>@<LXC局域网IP>
 - 搜索结果取决于你在 Jackett 中配置的索引站点。站点可用性、登录状态、Cookie、访问频率限制和资源质量均由外部站点决定。
 - 部分私有站需要认证或带 passkey 的下载地址。可在 Jackett 支持的范围内配置，切勿公开这些地址或凭据。
 - 机器人不会解析任意影视详情网页，不会爬取通用搜索引擎，也不会从普通网页中猜测下载地址。
+- 搜索结果按做种数降序、发布时间降序排列；做种数未知的结果排在已知做种数的结果之后。两项相同时保留 Jackett 原始顺序。机器人最多保留 `SEARCH_LIMIT` 条结果，Telegram 每页显示 10 条。Jackett 提供发布时间和索引站点名称时会一并显示。
 - 搜索结果按钮缓存于机器人内存中，机器人重启前产生的旧按钮将失效。
 - 完成通知依赖检测到任务进度从低于 100% 变为 100%。机器人首次观察到时已经完成的任务不会触发通知；如果任务完成期间机器人离线，也可能漏报。
 - 当前只有 `/list`，还没有暂停、继续、删除任务或单任务进度查询命令。
