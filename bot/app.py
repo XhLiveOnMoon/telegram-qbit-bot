@@ -35,7 +35,7 @@ QBIT_BASE = os.environ["QBIT_BASE_URL"].rstrip("/")
 QBIT_USER = os.environ["QBIT_USERNAME"]
 QBIT_PASS = os.environ["QBIT_PASSWORD"]
 QBIT_CATEGORY = os.environ.get("QBIT_CATEGORY", "telegram-bot")
-SEARCH_LIMIT = max(1, min(20, int(os.environ.get("SEARCH_LIMIT", "10"))))
+SEARCH_LIMIT = max(1, min(20, int(os.environ.get("SEARCH_LIMIT", "20"))))
 POLL_SECONDS = max(20, int(os.environ.get("POLL_INTERVAL_SECONDS", "60")))
 IDLE_POLL_SECONDS = max(
     POLL_SECONDS,
@@ -170,6 +170,39 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def render_search_page(query_text, token, results, page):
+    page_size = 10
+    total_pages = max(1, (len(results) + page_size - 1) // page_size)
+    page = max(0, min(page, total_pages - 1))
+    start = page * page_size
+    page_results = results[start:start + page_size]
+
+    lines = [
+        f"搜索：<b>{html.escape(query_text)}</b>",
+        f"结果 {start + 1}–{start + len(page_results)} / 共 {len(results)} 条（第 {page + 1}/{total_pages} 页）",
+        "",
+    ]
+    keyboard = []
+    for index, item in enumerate(page_results, start=start):
+        lines.append(
+            f"<b>{index + 1}.</b> {html.escape(item['title'][:180])}\n"
+            f"做种：{html.escape(item['seeders'] or '未知')} · 大小：{human_size(item['size'])}\n"
+            f"站点：{html.escape(item.get('indexer') or '未知')} · 发布：{html.escape(item.get('published') or '未知')}"
+        )
+        keyboard.append([InlineKeyboardButton(
+            f"下载 #{index + 1}", callback_data=f"dl:{token}:{index}"
+        )])
+
+    navigation = []
+    if page > 0:
+        navigation.append(InlineKeyboardButton("上一页", callback_data=f"pg:{token}:{page - 1}"))
+    if page + 1 < total_pages:
+        navigation.append(InlineKeyboardButton("下一页", callback_data=f"pg:{token}:{page + 1}"))
+    if navigation:
+        keyboard.append(navigation)
+    return "\n\n".join(lines), InlineKeyboardMarkup(keyboard)
+
+
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not authorized(update):
         return await deny(update)
@@ -182,28 +215,18 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not results:
             return await status.edit_text("没有找到结果。请检查 Jackett 中是否已配置并启用索引站点。")
         token = str(time.time_ns())
-        search_cache[token] = results
+        search_cache[token] = {"query": query_text, "results": results}
         while len(search_cache) > 30:
             search_cache.pop(next(iter(search_cache)))
-        lines = [f"搜索：<b>{html.escape(query_text)}</b>", ""]
-        keyboard = []
-        for index, item in enumerate(results):
-            lines.append(
-                f"<b>{index + 1}.</b> {html.escape(item['title'][:180])}\n"
-                f"做种：{html.escape(item['seeders'] or '未知')} · 大小：{human_size(item['size'])}"
-            )
-            keyboard.append([InlineKeyboardButton(
-                f"下载 #{index + 1}", callback_data=f"dl:{token}:{index}"
-            )])
+        text, markup = render_search_page(query_text, token, results, 0)
         await status.edit_text(
-            "\n\n".join(lines), parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            text, parse_mode=ParseMode.HTML,
+            reply_markup=markup,
             disable_web_page_preview=True,
         )
     except Exception as exc:
         log.exception("search failed")
         await status.edit_text(f"搜索失败：{html.escape(str(exc)[:300])}")
-
 
 async def choose_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -212,17 +235,29 @@ async def choose_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
     try:
-        _, token, index_text = query.data.split(":")
-        item = search_cache[token][int(index_text)]
+        action, token, value_text = query.data.split(":")
+        cached = search_cache[token]
+        if action == "pg":
+            text, markup = render_search_page(
+                cached["query"], token, cached["results"], int(value_text)
+            )
+            await query.edit_message_text(
+                text, parse_mode=ParseMode.HTML,
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+            return
+
+        index = int(value_text)
+        item = cached["results"][index]
         await asyncio.to_thread(add_qbit_url, item["url"])
         await query.edit_message_text(
             f"已提交 qBittorrent：\n{html.escape(item['title'])}",
             parse_mode=ParseMode.HTML,
         )
     except Exception as exc:
-        log.exception("add selected torrent failed")
-        await query.message.reply_text(f"添加失败：{str(exc)[:300]}")
-
+        log.exception("search result callback failed")
+        await query.message.reply_text(f"操作失败：{str(exc)[:300]}")
 
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not authorized(update):
@@ -346,7 +381,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("list", list_tasks))
-    app.add_handler(CallbackQueryHandler(choose_result, pattern=r"^dl:"))
+    app.add_handler(CallbackQueryHandler(choose_result, pattern=r"^(dl|pg):"))
     app.add_handler(MessageHandler(filters.Document.ALL, incoming_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, incoming_text))
     app.run_polling(allowed_updates=Update.ALL_TYPES)
